@@ -22,7 +22,7 @@ sys.path.append('../')
 from utils.model import D3
 from utils.sparse import NN_fill, generate_mask
 from utils.loader import NYU_V2, render_wave, board_data, real_data
-from utils import tools
+from utils import depth_tools
 import config
 
 ''' MODEL NAME '''
@@ -94,7 +94,7 @@ with torch.no_grad():
         depth = depth[0].cpu().numpy()
         fx = fx[0][0].cpu().numpy()
 
-        fx_img = tools.pack_float_to_bmp_bgra(fx)
+        fx_img = depth_tools.pack_float_to_bmp_bgra(fx)
         cv2.imwrite(dir_pred + 'pred_{:03d}.bmp'.format(idx), fx_img)
 
         """ Plot """

@@ -18,10 +18,10 @@ import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append('../')
 
-from utils.model import D3
+from utils.network import D3
 from utils.sparse import NN_fill, generate_mask
-from utils import tools
-from codes import config
+from utils import depth_tools
+from scripts import config
 
 """ Initializing Dataset class """
 class NYU_V2(Dataset):
@@ -86,7 +86,7 @@ class render_wave(Dataset):
 
         shade = cv2.imread(self.shadefile.format(idx), 1) / 255
         gt_img = cv2.imread(self.gtfile.format(idx), -1)
-        gt = tools.unpack_bmp_bgra_to_float(gt_img)
+        gt = depth_tools.unpack_bmp_bgra_to_float(gt_img)
         sp = np.load(self.sparse.format(idx))
 
         shade = torch.from_numpy(np.transpose(shade, (0, 1, 2)))
@@ -95,7 +95,7 @@ class render_wave(Dataset):
 
         if self.return_rec:
             rec_img = cv2.imread(self.recfile.format(idx), -1)
-            rec = torch.from_numpy(tools.unpack_bmp_bgra_to_float(rec_img))
+            rec = torch.from_numpy(depth_tools.unpack_bmp_bgra_to_float(rec_img))
             return shade.float(), gt.float(), rec.float()
         else:
             return shade.float(), gt.float(), sp.float()

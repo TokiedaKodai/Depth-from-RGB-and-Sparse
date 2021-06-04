@@ -6,7 +6,7 @@ from tqdm import tqdm
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append('../')
 
-from codes import config
+from scripts import config
 
 dir_data = config.dir_data + 'render_wave2-pose_600/'
 res = 512
