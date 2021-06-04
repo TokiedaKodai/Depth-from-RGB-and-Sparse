@@ -13,17 +13,28 @@ import time
 import csv
 import sys
 import os
+import argparse
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append('../')
 
-from utils.model import D3
+from utils.network import D3
 from utils.sparse import NN_fill, generate_mask
-from utils.loader import NYU_V2, render_wave
+from utils.loader import render_wave
 import config
+###############################################################################################
 
 ''' MODEL NAME '''
-model_name = 'wave2'
+model_name = 'wave2_100'
+
+''' ARG '''
+parser = argparse.ArgumentParser()
+parser.add_argument('--name', help='model name to use training and test')
+parser.add_argument('--epoch', type=int, help='epoch num')
+args = parser.parse_args()
+
+if args.name is not None:
+    model_name = args.name
 
 dir_model = config.dir_models + model_name + '/'
 os.makedirs(dir_model, exist_ok=True)
@@ -36,6 +47,18 @@ mask = generate_mask(24, 24, res, res)
 cuda = torch.cuda.is_available()
 device = torch.device("cuda" if cuda else "cpu")
 
+''' Training Parameters '''
+batch_size     = 8
+# batch_size     = 16
+num_epochs     = 1000
+learning_rate  = 0.001
+# n_workers = multiprocessing.cpu_count()
+# print('Worker num: ', n_workers)
+
+if args.epoch is not None:
+    num_epochs = args.epoch
+
+###############################################################################################
 """ Training funcion (per epoch) """
 def train(net, device, loader, optimizer, Loss_fun):
     #initialise counters
@@ -77,23 +100,15 @@ def train(net, device, loader, optimizer, Loss_fun):
     torch.save(net.state_dict(), dir_model + "saved_model.pt") 
 
     return running_loss
+###############################################################################################
 
 
 """ Creating Train loaders """
-# train_set = NYU_V2(trn_tst=0)
-# test_set = NYU_V2(trn_tst=1)
 train_set = render_wave(trn_tst=0)
 test_set = render_wave(trn_tst=1)
 
 print(f'Number of training examples: {len(train_set)}')
 print(f'Number of testing examples: {len(test_set)}')
-
-batch_size     = 8
-# batch_size     = 16
-num_epochs     = 1000
-learning_rate  = 0.001
-# n_workers = multiprocessing.cpu_count()
-# print('Worker num: ', n_workers)
 
 #initialising data loaders
 # trainloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=n_workers)
@@ -105,16 +120,16 @@ print('Loader built')
 img_batch, depth_batch, sp_batch = next(iter(trainloader))
 
 """ Plot dataset """
-plot_num = 4
+plot_num = min(4, len(train_set))
 plt.figure(figsize = (plot_num*2, 4))
 for tmp in range(plot_num):  
     plt.subplot(2,plot_num,tmp+1)
-    # plt.imshow(img_batch[tmp]/255)
-    plt.imshow(img_batch[tmp])
+    plt.imshow(img_batch[tmp]/255)
+    # plt.imshow(img_batch[tmp])
     plt.title("Image")
     plt.axis("off")
 
-    plt.subplot(2,plot_num,tmp+5)
+    plt.subplot(2,plot_num,tmp+plot_num+1)
     plt.imshow(depth_batch[tmp])
     plt.title("Depth")
     plt.axis("off")

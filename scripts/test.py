@@ -15,20 +15,34 @@ import csv
 import sys
 import os
 from tqdm import tqdm
+import argparse
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append('../')
 
-from utils.model import D3
+from utils.network import D3
 from utils.sparse import NN_fill, generate_mask
-from utils.loader import NYU_V2, render_wave, board_data, real_data
+from utils.loader import render_wave, board_data, real_data
 from utils import depth_tools
 import config
 
+''' ARG '''
+parser = argparse.ArgumentParser()
+parser.add_argument('--name', help='model name to use training and test')
+parser.add_argument('--pred', help='predict folder name')
+args = parser.parse_args()
+
+
 ''' MODEL NAME '''
-model_name = 'wave2'
-pred_name = 'pred_board'
+model_name = 'wave2_100'
+model_name = 'overfit'
+pred_name = 'pred_train'
 # pred_name = 'pred_real'
+
+if args.name is not None:
+    model_name = args.name
+if args.pred is not None:
+    pred_name = args.pred
 
 dir_model = config.dir_models + model_name + '/'
 dir_pred = dir_model + pred_name + '/'
@@ -44,41 +58,40 @@ device = torch.device("cuda" if cuda else "cpu")
 
 
 """ Creating Train loaders """
-# train_set = NYU_V2(trn_tst=0)
-# test_set = NYU_V2(trn_tst=1)
-# train_set = render_wave(trn_tst=0)
-# test_set = render_wave(trn_tst=1)
+train_set = render_wave(trn_tst=0)
+test_set = render_wave(trn_tst=1)
 
-test_set = board_data()
+# test_set = board_data()
 # test_set = real_data()
 
 # print(f'Number of training examples: {len(train_set)}')
 print(f'Number of testing examples: {len(test_set)}')
 
-testloader = DataLoader(test_set, batch_size=1, shuffle=True)
+testloader = DataLoader(train_set, batch_size=1, shuffle=False)
+# testloader = DataLoader(test_set, batch_size=1, shuffle=False)
 print('Loader built')
 
 
 """ Testing and visualising data """
 model = D3()
 model.load_state_dict(torch.load(dir_model + 'saved_model.pt'))
-testloader = torch.utils.data.DataLoader(test_set, batch_size=1, shuffle=False)
+# testloader = torch.utils.data.DataLoader(test_set, batch_size=1, shuffle=False)
 
 print('Test...')
 with torch.no_grad():
     model.eval()
     model.to(device)
 
-    for idx, (img, depth) in enumerate(testloader):
-        NN = []
-        #concat x with spatial data
-        for j in range(img.shape[0]):
-            sp = NN_fill(img[j].numpy(), depth[j].numpy(), mask)
-            NN.append(sp)
-        NN = torch.tensor(NN)
+    # for idx, (img, depth) in enumerate(testloader):
+    #     NN = []
+    #     #concat x with spatial data
+    #     for j in range(img.shape[0]):
+    #         sp = NN_fill(img[j].numpy(), depth[j].numpy(), mask)
+    #         NN.append(sp)
+    #     NN = torch.tensor(NN)
 
-    # for idx, (img, depth, sp) in enumerate(testloader):
-        # NN = sp
+    for idx, (img, depth, sp) in enumerate(testloader):
+        NN = sp
 
         img = img.permute(0, 3, 1, 2)
         img = img.to(device) 
@@ -104,8 +117,8 @@ with torch.no_grad():
 
         plt.figure(figsize = (15, 5))
         plt.subplot(1, 3, 1)
-        # plt.imshow(tets/255)
-        plt.imshow(tets[:, :, ::-1])
+        plt.imshow(tets[:, :, ::-1]/255)
+        # plt.imshow(tets[:, :, ::-1])
         plt.title("RGB")
         plt.axis("off")
 
@@ -121,3 +134,4 @@ with torch.no_grad():
 
         plt.savefig(dir_pred + 'result_{:03d}.png'.format(idx))
         # plt.show()
+        plt.close()

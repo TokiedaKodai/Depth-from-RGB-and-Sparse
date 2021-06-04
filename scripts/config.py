@@ -1,2 +1,2 @@
 dir_data = '../../data/'
-dir_models = '../models/'
+dir_models = '../../sp_models/'
