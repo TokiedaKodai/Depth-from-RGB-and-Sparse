@@ -23,7 +23,7 @@ sys.path.append('../')
 from utils.network import D3
 from utils.sparse import NN_fill, generate_mask
 from utils.loader import render_wave, board_data, real_data
-from utils import depth_tools
+from utils import depth_tools, evaluate
 import config
 
 ''' ARG '''
@@ -36,8 +36,22 @@ args = parser.parse_args()
 ''' MODEL NAME '''
 model_name = 'wave2_100'
 model_name = 'overfit'
+
 pred_name = 'pred_train'
 # pred_name = 'pred_real'
+
+''' OPTIOIN '''
+data_size = 12
+data_size = 3
+
+''' SETTING '''
+rgb_threshold = 0
+gt_threshold = 0.1
+res = 512
+# 24x24 downsampling
+# mask = generate_mask(24, 24, 480, 640)
+# mask = generate_mask(24, 24, res, res)
+
 
 if args.name is not None:
     model_name = args.name
@@ -48,24 +62,19 @@ dir_model = config.dir_models + model_name + '/'
 dir_pred = dir_model + pred_name + '/'
 os.makedirs(dir_pred, exist_ok=True)
 
-res = 512
-# 24x24 downsampling
-# mask = generate_mask(24, 24, 480, 640)
-mask = generate_mask(24, 24, res, res)
-
 cuda = torch.cuda.is_available()
 device = torch.device("cuda" if cuda else "cpu")
 
 
 """ Creating Train loaders """
-train_set = render_wave(trn_tst=0)
-test_set = render_wave(trn_tst=1)
+train_set = render_wave(data_size=data_size, trn_tst=0, return_rec=True)
+# test_set = render_wave(data_size=data_size, trn_tst=1)
 
 # test_set = board_data()
 # test_set = real_data()
 
-# print(f'Number of training examples: {len(train_set)}')
-print(f'Number of testing examples: {len(test_set)}')
+print(f'Number of training examples: {len(train_set)}')
+# print(f'Number of testing examples: {len(test_set)}')
 
 testloader = DataLoader(train_set, batch_size=1, shuffle=False)
 # testloader = DataLoader(test_set, batch_size=1, shuffle=False)
@@ -90,8 +99,13 @@ with torch.no_grad():
     #         NN.append(sp)
     #     NN = torch.tensor(NN)
 
-    for idx, (img, depth, sp) in enumerate(testloader):
+    for idx, (img, depth, sp, rec) in enumerate(testloader):
         NN = sp
+
+        # NN[:, 1, :, :] = 1 / NN[:, 1, :, :]
+        # NN[:, 1, :, :] /= NN[:, 1, :, :].max()
+        # NN = torch.cat((rec, rec), 1)
+
 
         img = img.permute(0, 3, 1, 2)
         img = img.to(device) 
@@ -103,22 +117,54 @@ with torch.no_grad():
 
         fx = model(img, NN)
 
-        tets = img[0].permute(1, 2, 0).cpu().numpy()
+        img = img[0].permute(1, 2, 0).cpu().numpy()
         depth = depth[0].cpu().numpy()
         fx = fx[0][0].cpu().numpy()
+        NN = NN.cpu().numpy()
 
-        fx_img = depth_tools.pack_float_to_bmp_bgra(fx)
-        cv2.imwrite(dir_pred + 'pred_{:03d}.bmp'.format(idx), fx_img)
+        s1 = NN[:, 0, :, :]
+        s2 = NN[:, 1, :, :]
+
+        pred = fx
+        sparse = s1[0]
+        # pred += s1[0]
+
+        ''' Normalize prediction '''
+        mask_rgb = img[:, :, 0] > rgb_threshold
+        mask_depth = depth > gt_threshold
+        mask = mask_rgb * mask_depth
+        mask = mask.astype(np.float32)
+        # rec = rec[0][0].cpu().numpy()
+
+        # gt = (depth - rec) * mask
+        gt = (depth - sparse) * mask
+        length = np.sum(mask)
+        mean_gt = np.sum(gt) / length
+        max_gt = np.max(np.abs(gt - mean_gt))
+        max_pred = np.max(np.abs(pred))
+        # diff = (pred / max_pred) * max_gt + mean_gt
+        diff = pred * max_gt + mean_gt
+        pred = sparse + diff
+
+        pred, mask = evaluate.norm_diff(pred, depth, sparse, mask)
+        # pred, mask = evaluate.norm_diff(pred, depth, rec, mask)
+        # pred, mask = evaluate.norm_diff(pred, gt, rec, mask)
+
+        depth *= mask
+        pred *= mask
+
+        pred_img = depth_tools.pack_float_to_bmp_bgra(pred)
+        cv2.imwrite(dir_pred + 'pred_{:03d}.bmp'.format(idx), pred_img)
 
         """ Plot """
-        mean_depth = np.mean(fx)
+        mean_depth = np.sum(depth) / np.sum(mask)
         depth_range = 0.02
         vmin, vmax = mean_depth - depth_range, mean_depth + depth_range
 
         plt.figure(figsize = (15, 5))
         plt.subplot(1, 3, 1)
-        plt.imshow(tets[:, :, ::-1]/255)
-        # plt.imshow(tets[:, :, ::-1])
+        # plt.imshow(img[:, :, ::-1]/255)
+        plt.imshow(img[:, :, ::-1])
         plt.title("RGB")
         plt.axis("off")
 
@@ -128,7 +174,7 @@ with torch.no_grad():
         plt.axis("off")
 
         plt.subplot(1, 3, 3)
-        plt.imshow(fx, cmap='jet', vmin=vmin, vmax=vmax)
+        plt.imshow(pred, cmap='jet', vmin=vmin, vmax=vmax)
         plt.title("Depth prediction")
         plt.axis("off")
 

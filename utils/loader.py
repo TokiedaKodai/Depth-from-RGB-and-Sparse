@@ -25,14 +25,14 @@ from scripts import config
 
 
 class render_wave(Dataset):
-    def __init__(self, trn_tst=0, return_rec=False):
+    def __init__(self, data_size=600, trn_tst=0, return_rec=False):
         datapath = config.dir_data + 'render_wave2-pose_600/'
         self.gtfile = datapath + 'gt_512/{:05d}.bmp'
         self.recfile = datapath + 'rec_512/{:05d}.bmp'
         self.shadefile = datapath + 'shade_512/{:05d}.png'
         self.projfile = datapath + 'proj_512/{:05d}.png'
         self.sparse = datapath + 'sparse_512/{:05d}.npy'
-        self.data_len = 2
+        self.data_len = data_size
         self.train_rate = 0.7
         self.return_rec = return_rec
 
@@ -49,19 +49,27 @@ class render_wave(Dataset):
     def __getitem__(self, idx):
         idx += self.start
 
-        shade = cv2.imread(self.shadefile.format(idx), 1) #/ 255
+        shade = cv2.imread(self.shadefile.format(idx), 1) / 255.
         gt_img = cv2.imread(self.gtfile.format(idx), -1)
         gt = depth_tools.unpack_bmp_bgra_to_float(gt_img)
         sp = np.load(self.sparse.format(idx))
 
-        shade = torch.from_numpy(np.transpose(shade, (0, 1, 2)))
-        gt = torch.from_numpy(np.transpose(gt, (0, 1)))
+        # shade = shade[:128, :128, :]
+        # gt = gt[:128, :128]
+
+        # shade = torch.from_numpy(np.transpose(shade, (0, 1, 2)))
+        # gt = torch.from_numpy(np.transpose(gt, (0, 1)))
+        shade = torch.from_numpy(shade)
+        gt = torch.from_numpy(gt)
         sp = torch.from_numpy(sp)
 
         if self.return_rec:
             rec_img = cv2.imread(self.recfile.format(idx), -1)
-            rec = torch.from_numpy(depth_tools.unpack_bmp_bgra_to_float(rec_img))
-            return shade.float(), gt.float(), rec.float()
+            rec = depth_tools.unpack_bmp_bgra_to_float(rec_img)
+            # rec = rec[:128, :128]
+            rec = rec[np.newaxis]
+            rec = torch.from_numpy(rec)
+            return shade.float(), gt.float(), sp.float(), rec.float()
         else:
             return shade.float(), gt.float(), sp.float()
 
