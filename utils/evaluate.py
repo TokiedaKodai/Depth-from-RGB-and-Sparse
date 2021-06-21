@@ -7,14 +7,10 @@ patch_rate = 50
 def norm_diff(pred, gt, sp, mask):
     shapes = pred.shape
     normed = np.zeros_like(pred)
-    mask[:p, :] = 0
-    mask[shapes[0]-p:, :] = 0
-    mask[:, :p] = 0
-    mask[:, shapes[0]-p:] = 0
     new_mask = mask.copy()
 
-    # diff_pred = (pred - sp)*mask
-    diff_pred = pred * mask
+    diff_pred = (pred - sp)*mask
+    # diff_pred = pred * mask
     diff_gt = (gt - sp)*mask
     cnt = 0
     for i in range(p, shapes[0]-p):
@@ -39,4 +35,13 @@ def norm_diff(pred, gt, sp, mask):
             local_sd_pred = np.sqrt(np.sum(np.square(local_pred - local_mean_pred)) / local_mask_len)
             normed[i, j] = (diff_pred[i, j] - local_mean_pred) * (local_sd_gt / local_sd_pred) + local_mean_gt
 
+    new_mask[:p, :] = 0
+    new_mask[shapes[0]-p:, :] = 0
+    new_mask[:, :p] = 0
+    new_mask[:, shapes[0]-p:] = 0
     return normed+sp, new_mask
+
+def evaluate_rmse(pred, gt, mask):
+    length = np.sum(mask)
+    rmse = np.sqrt(np.sum(np.square(pred - gt)*mask) / length)
+    return rmse
